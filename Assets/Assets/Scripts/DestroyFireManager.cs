@@ -63,6 +63,12 @@ public class DestroyFireManager : MonoBehaviour
     [Tooltip("Интенсивность тряски на 100%")]
     [SerializeField] private float shakeIntensity100 = 0.25f;
     
+    [Tooltip("Интенсивность тряски на 2 этапе падения верхушки")]
+    [SerializeField] private float shakeIntensityTopStage2 = 0.15f;
+    
+    [Tooltip("Интенсивность тряски на 3 этапе падения верхушки")]
+    [SerializeField] private float shakeIntensityTopStage3 = 0.2f;
+    
     [Tooltip("Длительность тряски")]
     [SerializeField] private float shakeDuration = 0.5f;
     
@@ -555,6 +561,13 @@ public class DestroyFireManager : MonoBehaviour
         if (debug) Debug.Log("[DestroyFireManager] Верхушка: этап 1 завершён");
         
         // === ЭТАП 2 верхушки ===
+        // Тряска камеры в начале этапа 2
+        if (thirdPersonCamera != null)
+        {
+            thirdPersonCamera.Shake(shakeIntensityTopStage2, shakeDuration);
+            if (debug) Debug.Log("[DestroyFireManager] Тряска: начало этапа 2 верхушки");
+        }
+        
         startPos = towerTop.localPosition;
         startRot = towerTop.localRotation;
         targetPos = new Vector3(-39f, -62f, 0f);
@@ -575,6 +588,13 @@ public class DestroyFireManager : MonoBehaviour
         if (debug) Debug.Log("[DestroyFireManager] Верхушка: этап 2 завершён");
         
         // === ЭТАП 3 верхушки ===
+        // Тряска камеры в начале этапа 3
+        if (thirdPersonCamera != null)
+        {
+            thirdPersonCamera.Shake(shakeIntensityTopStage3, shakeDuration);
+            if (debug) Debug.Log("[DestroyFireManager] Тряска: начало этапа 3 верхушки");
+        }
+        
         startPos = towerTop.localPosition;
         startRot = towerTop.localRotation;
         targetPos = new Vector3(-150f, -200f, 0f);

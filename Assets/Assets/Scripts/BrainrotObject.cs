@@ -25,6 +25,9 @@ public class BrainrotObject : InteractableObject
     [Tooltip("Уровень объекта")]
     [SerializeField] private int level = 1;
     
+    [Tooltip("Масштаб объекта внутри клетки (Cell)")]
+    [SerializeField] private float cellScale = 1f;
+    
     
     [Header("UI Префаб с данными")]
     [Tooltip("Префаб с TextMeshPro компонентами для отображения данных (Name, Rarity, Income, Level)")]
@@ -76,9 +79,6 @@ public class BrainrotObject : InteractableObject
     
     [Tooltip("Инвертировать поворот брейнрота по Y на 180 градусов при создании босса")]
     [SerializeField] private bool invertBossRotation = false;
-    
-    [Tooltip("Брейнрот ещё не побеждён (можно начать бой)")]
-    [SerializeField] private bool unfought = true;
     
     [Header("Events")]
     [SerializeField] private UnityEvent onTake;
@@ -281,35 +281,16 @@ public class BrainrotObject : InteractableObject
     /// </summary>
     protected override void CompleteInteraction()
     {
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"a:\CODE\unity_projects\Steal_brainrot_fight\.cursor\debug.log", 
-            $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"BrainrotObject.cs:243\",\"message\":\"CompleteInteraction entry\",\"data\":{{\"isCarried\":{isCarried.ToString().ToLower()},\"isPlaced\":{isPlaced.ToString().ToLower()},\"unfought\":{unfought.ToString().ToLower()},\"objectName\":\"{objectName}\"}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-        // #endregion
-        
         // ВАЖНО: Если объект размещен на панели, НЕ обрабатываем взаимодействие
         // Взаимодействие должно обрабатываться только через PlacementPanel
-        // Это предотвращает двойной вызов CompleteInteraction
         if (isPlaced)
         {
             bool isPlacedOnPanel = PlacementPanel.IsBrainrotPlacedOnPanel(this);
             if (isPlacedOnPanel)
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"a:\CODE\unity_projects\Steal_brainrot_fight\.cursor\debug.log", 
-                    $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"J\",\"location\":\"BrainrotObject.cs:252\",\"message\":\"CompleteInteraction - skipping because placed on panel\",\"data\":{{\"objectName\":\"{objectName}\"}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-                // #endregion
-                // Объект размещен на панели - не обрабатываем взаимодействие
                 ResetInteraction();
                 return;
             }
-        }
-        
-        // Unfought брейнрота никогда не берём в руки и не перемещаем — только бой. Не вызываем Put(), чтобы объект не телепортировался.
-        if (unfought && !isCarried)
-        {
-            StartFight();
-            ResetInteraction();
-            return;
         }
         
         if (isCarried)
@@ -363,13 +344,13 @@ public class BrainrotObject : InteractableObject
                 ResetInteraction();
                 return;
             }
-            // Сюда попадаем только если размещён на земле и уже побеждён (unfought обработан выше)
+            // Размещён на земле — берём в руки
             Take();
             ResetInteraction();
         }
         else
         {
-            // Сюда попадаем только если не взят и не размещён и уже побеждён (unfought обработан выше)
+            // Не взят и не размещён — берём в руки
             Take();
             ResetInteraction();
         }
@@ -388,10 +369,6 @@ public class BrainrotObject : InteractableObject
     /// </summary>
     public void Take()
     {
-        // Не брать в руки брейнрота, если он ещё не побеждён (unfought) — с ним нужно сразиться
-        if (unfought)
-            return;
-        
         if (playerCarryController == null)
         {
             FindPlayerCarryController();
@@ -414,10 +391,6 @@ public class BrainrotObject : InteractableObject
         {
             CacheComponents();
         }
-        
-        // Повторная проверка перед изменением состояния (на случай двойного вызова или гонки)
-        if (unfought)
-            return;
         
         // Устанавливаем состояние
         isCarried = true;
@@ -1131,6 +1104,22 @@ public class BrainrotObject : InteractableObject
     }
     
     /// <summary>
+    /// Получить масштаб объекта внутри клетки (Cell)
+    /// </summary>
+    public float GetCellScale()
+    {
+        return cellScale;
+    }
+    
+    /// <summary>
+    /// Установить масштаб объекта внутри клетки (Cell)
+    /// </summary>
+    public void SetCellScale(float newCellScale)
+    {
+        cellScale = newCellScale;
+    }
+    
+    /// <summary>
     /// Инициализирует префаб с данными
     /// </summary>
     private void InitializeInfoPrefab()
@@ -1519,6 +1508,15 @@ public class BrainrotObject : InteractableObject
     }
     
     /// <summary>
+    /// Принудительно показать или скрыть префаб с данными (BR_Info). Используется для превью в Cell — показывать info, скрывать только interaction.
+    /// </summary>
+    public void SetInfoVisible(bool visible)
+    {
+        if (infoPrefabInstance != null)
+            infoPrefabInstance.SetActive(visible);
+    }
+    
+    /// <summary>
     /// Обновляет данные в префабе (публичный метод для внешнего вызова)
     /// </summary>
     public void RefreshInfoPrefab()
@@ -1543,86 +1541,25 @@ public class BrainrotObject : InteractableObject
     }
     
     /// <summary>
-    /// Получить значение unfought (брейнрот ещё не побеждён)
+    /// Получить значение unfought (оставлено для совместимости API, всегда false — механика боя удалена)
     /// </summary>
     public bool IsUnfought()
     {
-        return unfought;
+        return false;
     }
     
     /// <summary>
-    /// Установить значение unfought
+    /// Установить значение unfought (оставлено для совместимости API, без эффекта)
     /// </summary>
     public void SetUnfought(bool value)
     {
-        unfought = value;
     }
     
     /// <summary>
-    /// Отметить брейнрота как побеждённого (снять флаг unfought)
+    /// Отметить брейнрота как побеждённого (оставлено для совместимости API, без эффекта)
     /// </summary>
     public void MarkAsDefeated()
     {
-        unfought = false;
-        Debug.Log($"[BrainrotObject] {objectName}: Брейнрот отмечен как побеждённый");
-    }
-    
-    /// <summary>
-    /// Начинает бой с боссом (телепортирует в зону сражения)
-    /// </summary>
-    private void StartFight()
-    {
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"a:\CODE\unity_projects\Steal_brainrot_fight\.cursor\debug.log", 
-            $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"BrainrotObject.cs:1396\",\"message\":\"StartFight entry\",\"data\":{{\"unfought\":{unfought.ToString().ToLower()},\"objectName\":\"{objectName}\"}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-        // #endregion
-        
-        // ВАЖНО: Проверяем, можно ли начать бой (брейнрот должен быть unfought)
-        if (!unfought)
-        {
-            Debug.Log($"[BrainrotObject] {objectName}: Брейнрот уже побеждён, бой не начинается");
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"a:\CODE\unity_projects\Steal_brainrot_fight\.cursor\debug.log", 
-                $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"BrainrotObject.cs:1400\",\"message\":\"StartFight early return - already defeated\",\"data\":{{\"unfought\":{unfought.ToString().ToLower()},\"objectName\":\"{objectName}\"}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-            // #endregion
-            return;
-        }
-        
-        Debug.Log($"[BrainrotObject] {objectName}: Вызван StartFight(), unfought: {unfought}");
-        
-        // Находим TeleportManager
-        TeleportManager teleportManager = TeleportManager.Instance;
-        
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"a:\CODE\unity_projects\Steal_brainrot_fight\.cursor\debug.log", 
-            $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\",\"location\":\"BrainrotObject.cs:1408\",\"message\":\"TeleportManager.Instance check\",\"data\":{{\"teleportManagerNull\":{(teleportManager == null).ToString().ToLower()},\"objectName\":\"{objectName}\"}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-        // #endregion
-        
-        if (teleportManager == null)
-        {
-            Debug.LogError($"[BrainrotObject] {objectName}: TeleportManager не найден!");
-            return;
-        }
-        
-        Debug.Log($"[BrainrotObject] {objectName}: TeleportManager найден, начинаем телепортацию");
-        
-        // ВАЖНО: Убеждаемся, что телепортация действительно запускается
-        // Проверяем, не идет ли уже телепортация
-        if (teleportManager != null)
-        {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"a:\CODE\unity_projects\Steal_brainrot_fight\.cursor\debug.log", 
-                $"{{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\",\"location\":\"BrainrotObject.cs:1422\",\"message\":\"Calling TeleportToBattleZone\",\"data\":{{\"objectName\":\"{objectName}\"}},\"timestamp\":{System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n"); } catch {}
-            // #endregion
-            
-            // Телепортируем в зону сражения
-            teleportManager.TeleportToBattleZone(this);
-            Debug.Log($"[BrainrotObject] {objectName}: Начинается бой с боссом, TeleportToBattleZone вызван");
-        }
-        else
-        {
-            Debug.LogError($"[BrainrotObject] {objectName}: TeleportManager равен null после проверки!");
-        }
     }
     
     private void OnDestroy()

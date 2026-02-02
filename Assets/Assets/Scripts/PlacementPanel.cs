@@ -214,7 +214,7 @@ public class PlacementPanel : InteractableObject
         // Сбрасываем флаг загрузки
         isLoadingPlacedBrainrots = false;
         
-        Debug.Log($"[PlacementPanel] Загружен и размещен брейнрот '{placementData.brainrotName}' уровня {placementData.level}, редкость: {placementData.rarity}, baseIncome: {placementData.baseIncome} на панели {panelID}, unfought установлен в false");
+        Debug.Log($"[PlacementPanel] Загружен и размещен брейнрот '{placementData.brainrotName}' уровня {placementData.level}, редкость: {placementData.rarity}, baseIncome: {placementData.baseIncome} на панели {panelID}");
     }
     
     /// <summary>

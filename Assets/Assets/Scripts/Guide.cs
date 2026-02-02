@@ -10,7 +10,7 @@ public class Guide : MonoBehaviour
     [SerializeField] private GameObject guidanceLinePrefab;
     
     [Header("Цели")]
-    [Tooltip("Transform кнопки спавна брейнрота. Если на карте нет unfought брейнротов — линия ведёт на кнопку.")]
+    [Tooltip("Transform кнопки спавна брейнрота. Если на карте нет свободных брейнротов — линия ведёт на кнопку.")]
     [SerializeField] private Transform spawnBrainrotButtonTransform;
     
     [Header("Оптимизация")]
@@ -22,7 +22,6 @@ public class Guide : MonoBehaviour
     private GameObject tempTargetObject; // Временный объект для позиции панели
     private PlayerCarryController playerCarryController;
     private bool forceUpdateTarget = false; // Флаг для принудительного обновления цели
-    private bool isPlayerDefeated = false; // Флаг поражения игрока (для игнорирования unfought брейнротов)
     private float updateTimer = 0f; // Таймер для оптимизации обновления
     
     void Start()
@@ -58,43 +57,14 @@ public class Guide : MonoBehaviour
     }
     
     /// <summary>
-    /// Вызывается при поражении игрока — сбрасывает цель гайда на кнопку.
-    /// </summary>
-    void OnPlayerDefeated()
-    {
-        isPlayerDefeated = true;
-        forceUpdateTarget = true;
-        ForceResetToButton();
-    }
-    
-    /// <summary>
-    /// Вызывается при окончании битвы — сбрасывает цель гайда.
-    /// </summary>
-    void OnBattleEnded()
-    {
-        // Сбрасываем флаг поражения после окончания битвы (брейнрот уже удалён)
-        isPlayerDefeated = false;
-        forceUpdateTarget = true;
-    }
-    
-    /// <summary>
     /// Принудительно сбрасывает линию на кнопку спавна.
     /// </summary>
     void ForceResetToButton()
     {
         if (guidanceLineScript == null) return;
         
-        Transform target = null;
+        Transform target = FindNearestBrainrot();
         
-        // При поражении игрока — всегда ведём к кнопке (игнорируем unfought брейнротов,
-        // т.к. брейнрот босса ещё не удалён)
-        if (!isPlayerDefeated)
-        {
-            // Сначала пробуем найти unfought брейнрота
-            target = FindNearestUnfoughtBrainrot();
-        }
-        
-        // Если нет unfought брейнротов или игрок проиграл — ведём на кнопку
         if (target == null && spawnBrainrotButtonTransform != null)
         {
             target = spawnBrainrotButtonTransform;
@@ -206,14 +176,8 @@ public class Guide : MonoBehaviour
         }
         else
         {
-            // В руках нет брейнрота: ведём на unfought брейнрота или на кнопку спавна
-            Transform target = null;
-            
-            // При поражении игрока — игнорируем unfought брейнротов (брейнрот босса ещё не удалён)
-            if (!isPlayerDefeated)
-            {
-                target = FindNearestUnfoughtBrainrot();
-            }
+            // В руках нет брейнрота: ведём на ближайшего свободного брейнрота или на кнопку спавна
+            Transform target = FindNearestBrainrot();
             
             if (target == null && spawnBrainrotButtonTransform != null)
                 target = spawnBrainrotButtonTransform;
@@ -265,32 +229,6 @@ public class Guide : MonoBehaviour
         return closest?.transform;
     }
     
-    /// <summary>Ближайший unfought брейнрот (не в руках, не размещён).</summary>
-    Transform FindNearestUnfoughtBrainrot()
-    {
-        BrainrotObject[] allBrainrots = FindObjectsByType<BrainrotObject>(FindObjectsSortMode.None);
-        if (allBrainrots == null || allBrainrots.Length == 0)
-            return null;
-        
-        Transform playerTransform = GetPlayerTransform();
-        if (playerTransform == null)
-            return null;
-        
-        float minDistance = float.MaxValue;
-        BrainrotObject closest = null;
-        foreach (BrainrotObject brainrot in allBrainrots)
-        {
-            if (!brainrot.IsUnfought() || brainrot.IsCarried() || brainrot.IsPlaced())
-                continue;
-            float distance = Vector3.Distance(playerTransform.position, brainrot.transform.position);
-            if (distance < minDistance)
-            {
-                minDistance = distance;
-                closest = brainrot;
-            }
-        }
-        return closest?.transform;
-    }
     
     Transform GetPlayerTransform()
     {

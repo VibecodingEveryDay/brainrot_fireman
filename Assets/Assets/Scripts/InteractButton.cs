@@ -37,7 +37,6 @@ public class InteractButton : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     private int searchFrameCount = 0;
     private string defaultText = "ВЗЯТЬ"; // Будет обновлено через локализацию
     private string putText = "ПОСТАВИТЬ"; // Будет обновлено через локализацию
-    private string fightText = "Бой"; // ru: Бой, en: Fight — для unfought босса (BrainrotObject)
     private string currentLanguage = "ru"; // Текущий язык для отслеживания изменений
     
     private void Awake()
@@ -464,13 +463,11 @@ public class InteractButton : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         {
             defaultText = "ВЗЯТЬ";
             putText = "ПОСТАВИТЬ";
-            fightText = "Бой";
         }
         else
         {
             defaultText = "TAKE";
             putText = "PUT";
-            fightText = "Fight";
         }
     }
     
@@ -510,14 +507,8 @@ public class InteractButton : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             hasBrainrotInHands = playerCarryController.GetCurrentCarriedObject() != null;
         }
         
-        // Текст: если в руках — "Поставить"; иначе — "Бой"/"Fight" для unfought босса, иначе "Взять"
-        string newText;
-        if (hasBrainrotInHands)
-            newText = putText;
-        else if (currentInteractableObject is BrainrotObject brainrot && brainrot.IsUnfought())
-            newText = fightText;
-        else
-            newText = defaultText;
+        // Текст: если в руках — "Поставить"; иначе — "Взять"
+        string newText = hasBrainrotInHands ? putText : defaultText;
         
         if (textTMP.text != newText)
         {

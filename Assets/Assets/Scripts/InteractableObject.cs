@@ -335,10 +335,25 @@ public class InteractableObject : MonoBehaviour
     }
     
     /// <summary>
+    /// Переопределение позиции взаимодействия (для наследников, например Cell с центром по pivot/bounds).
+    /// </summary>
+    protected virtual bool TryGetCustomInteractionPosition(out Vector3 worldPosition)
+    {
+        worldPosition = default;
+        return false;
+    }
+    
+    /// <summary>
     /// Получает позицию точки взаимодействия
     /// </summary>
     private Vector3 GetInteractionPosition()
     {
+        // Приоритет 0: Кастомная позиция от наследника
+        if (TryGetCustomInteractionPosition(out Vector3 customPos))
+        {
+            return customPos;
+        }
+        
         // Приоритет 1: Используем специальную точку взаимодействия
         if (interactionPoint != null)
         {
@@ -479,7 +494,8 @@ public class InteractableObject : MonoBehaviour
         
         // Показываем UI при входе в радиус (если UI еще не создан или скрыт)
         // ВАЖНО: Если взаимодействие завершено, UI больше не показывается
-        bool shouldCreateUI = isPlayerInRange && !interactionCompleted;
+        // Наследники могут переопределить ShouldShowInteractionUI() (например, только ближайшая Cell)
+        bool shouldCreateUI = isPlayerInRange && !interactionCompleted && ShouldShowInteractionUI();
         bool uiExistsButHidden = currentUIInstance != null && !currentUIInstance.activeSelf;
         
         if (shouldCreateUI)
@@ -506,6 +522,11 @@ public class InteractableObject : MonoBehaviour
         else if (isPlayerInRange && currentUIInstance == null && interactionCompleted && debugMode)
         {
             Debug.Log($"[InteractableObject] {gameObject.name}: UI не создается - взаимодействие уже завершено");
+        }
+        // Если в радиусе, но показывать UI не нужно (например, не ближайшая Cell) — скрываем UI
+        if (isPlayerInRange && currentUIInstance != null && !ShouldShowInteractionUI())
+        {
+            DestroyUI();
         }
     }
     
@@ -1457,6 +1478,15 @@ public class InteractableObject : MonoBehaviour
     public Vector3 GetInteractionPositionPublic()
     {
         return GetInteractionPosition();
+    }
+    
+    /// <summary>
+    /// Нужно ли показывать UI взаимодействия (например, только для ближайшей Cell).
+    /// Переопределите в наследниках, чтобы ограничить показ UI.
+    /// </summary>
+    protected virtual bool ShouldShowInteractionUI()
+    {
+        return true;
     }
     
     /// <summary>

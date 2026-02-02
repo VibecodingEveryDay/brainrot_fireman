@@ -414,38 +414,119 @@ public class CameraCollisionHandler : MonoBehaviour
     /// </summary>
     private Vector3 CheckVerticalObstacles(Vector3 desiredPosition)
     {
-        // Проверяем препятствия сверху (потолок)
+        // Проверяем препятствия сверху (потолок) от target
         RaycastHit hitUp;
-        Vector3 upCheckStart = target.position;
         Vector3 upDirection = Vector3.up;
-        float maxUpDistance = 5f; // Максимальная высота проверки
+        float maxUpDistance = 10f;
         
-        if (Physics.Raycast(upCheckStart, upDirection, out hitUp, maxUpDistance, obstacleMask, QueryTriggerInteraction.Ignore))
+        if (Physics.Raycast(target.position, upDirection, out hitUp, maxUpDistance, obstacleMask, QueryTriggerInteraction.Ignore))
         {
             float ceilingHeight = hitUp.point.y - collisionOffset;
-            // Если желаемая позиция камеры выше потолка, ограничиваем её
             if (desiredPosition.y > ceilingHeight)
             {
                 desiredPosition.y = ceilingHeight;
             }
         }
         
-        // Проверяем препятствия снизу (пол)
-        RaycastHit hitDown;
-        Vector3 downDirection = Vector3.down;
-        float maxDownDistance = 5f; // Максимальная глубина проверки
+        // === УЛУЧШЕННАЯ ПРОВЕРКА ПОЛА ===
         
-        if (Physics.Raycast(target.position, downDirection, out hitDown, maxDownDistance, obstacleMask, QueryTriggerInteraction.Ignore))
+        // 1. Проверяем пол под target (основной пол уровня)
+        RaycastHit hitDownFromTarget;
+        Vector3 downDirection = Vector3.down;
+        float maxDownDistance = 50f;
+        
+        float floorHeight = float.MinValue;
+        
+        if (Physics.Raycast(target.position, downDirection, out hitDownFromTarget, maxDownDistance, obstacleMask, QueryTriggerInteraction.Ignore))
         {
-            float floorHeight = hitDown.point.y + collisionOffset;
-            // Если желаемая позиция камеры ниже пола, ограничиваем её
-            if (desiredPosition.y < floorHeight)
+            floorHeight = hitDownFromTarget.point.y + collisionOffset;
+        }
+        
+        // 2. Проверяем пол под желаемой позицией камеры
+        RaycastHit hitDownFromCamera;
+        if (Physics.Raycast(desiredPosition + Vector3.up * 2f, downDirection, out hitDownFromCamera, maxDownDistance, obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            float cameraFloorHeight = hitDownFromCamera.point.y + collisionOffset;
+            // Используем более высокий пол
+            if (cameraFloorHeight > floorHeight)
             {
-                desiredPosition.y = floorHeight;
+                floorHeight = cameraFloorHeight;
+            }
+        }
+        
+        // 3. Проверяем, не находится ли камера уже под полом (SphereCast вверх)
+        RaycastHit hitUpFromCamera;
+        if (Physics.SphereCast(desiredPosition, collisionRadius, upDirection, out hitUpFromCamera, 5f, obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            // Если над камерой есть препятствие очень близко, возможно камера под полом
+            // Проверяем, является ли это препятствие "полом" (нормаль смотрит вниз)
+            if (hitUpFromCamera.normal.y < -0.5f && hitUpFromCamera.distance < 1f)
+            {
+                // Камера под перевёрнутым plane - поднимаем её выше препятствия
+                float surfaceHeight = hitUpFromCamera.point.y + collisionOffset;
+                if (desiredPosition.y < surfaceHeight)
+                {
+                    desiredPosition.y = surfaceHeight;
+                    
+                    if (showDebugRays)
+                    {
+                        Debug.DrawRay(desiredPosition, Vector3.up * 2f, Color.red);
+                    }
+                }
+            }
+        }
+        
+        // 4. Применяем ограничение по полу
+        if (floorHeight > float.MinValue && desiredPosition.y < floorHeight)
+        {
+            desiredPosition.y = floorHeight;
+        }
+        
+        // 5. Дополнительно: проверяем OverlapSphere для обнаружения пересечения с любыми коллайдерами
+        Collider[] overlaps = Physics.OverlapSphere(desiredPosition, collisionRadius, obstacleMask, QueryTriggerInteraction.Ignore);
+        if (overlaps.Length > 0)
+        {
+            // Камера пересекается с чем-то - пробуем поднять её
+            foreach (Collider col in overlaps)
+            {
+                // ClosestPoint поддерживается только для Box, Sphere, Capsule и выпуклого MeshCollider
+                if (!IsClosestPointSupported(col))
+                    continue;
+                
+                // Получаем ближайшую точку на коллайдере
+                Vector3 closestPoint = col.ClosestPoint(desiredPosition);
+                
+                // Если камера ниже ближайшей точки, поднимаем
+                if (desiredPosition.y < closestPoint.y + collisionOffset)
+                {
+                    // Проверяем, что это горизонтальная поверхность (пол)
+                    Vector3 dirToCamera = (desiredPosition - closestPoint).normalized;
+                    if (Mathf.Abs(dirToCamera.y) > 0.3f)
+                    {
+                        desiredPosition.y = closestPoint.y + collisionRadius + collisionOffset;
+                        
+                        if (showDebugRays)
+                        {
+                            Debug.DrawLine(closestPoint, desiredPosition, Color.magenta);
+                        }
+                    }
+                }
             }
         }
         
         return desiredPosition;
+    }
+    
+    /// <summary>
+    /// Проверяет, поддерживает ли коллайдер ClosestPoint (Box, Sphere, Capsule, выпуклый MeshCollider).
+    /// </summary>
+    private static bool IsClosestPointSupported(Collider col)
+    {
+        if (col is BoxCollider || col is SphereCollider || col is CapsuleCollider)
+            return true;
+        if (col is MeshCollider meshCol)
+            return meshCol.convex;
+        return false;
     }
     
     /// <summary>
