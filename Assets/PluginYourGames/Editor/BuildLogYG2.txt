@@ -1,0 +1,3 @@
+﻿Build path: A:/CODE/unity_builds/brainrot_fight
+Build number: 16
+PluginYG version: 2.007
