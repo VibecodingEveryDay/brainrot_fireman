@@ -13,6 +13,9 @@ public class DestroyFireManager : MonoBehaviour
     [Tooltip("Image прогресс бара (Filled Horizontal)")]
     [SerializeField] private Image progressBar;
     
+    [Tooltip("Длительность плавной анимации заполнения до целевого значения (сек). 0 = без анимации, мгновенное обновление")]
+    [SerializeField] private float progressBarFillDuration = 0.3f;
+    
     [Header("Time Settings")]
     [Tooltip("Минимальный интервал между добавлениями прогресса (секунды)")]
     [SerializeField] private float minInterval = 2f;
@@ -72,6 +75,17 @@ public class DestroyFireManager : MonoBehaviour
     [Tooltip("Длительность тряски")]
     [SerializeField] private float shakeDuration = 0.5f;
     
+    [Header("Shake Sound")]
+    [Tooltip("Звук при тряске камеры (проигрывается при каждом shake)")]
+    [SerializeField] private AudioClip shakeSound;
+    
+    [Tooltip("Громкость звука тряски (0-1)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float shakeSoundVolume = 1f;
+    
+    [Tooltip("AudioSource для звука тряски (если не назначен — создаётся автоматически)")]
+    [SerializeField] private AudioSource shakeAudioSource;
+    
     [Header("Tower Collapse - Objects")]
     [Tooltip("Верхушка башни (группа мешей)")]
     [SerializeField] private Transform towerTop;
@@ -114,6 +128,9 @@ public class DestroyFireManager : MonoBehaviour
     
     // Текущий прогресс (0-1)
     private float currentProgress = 0f;
+    
+    // Отображаемый прогресс для плавной анимации (0-1)
+    private float displayedProgress = 0f;
     
     // Таймер до следующего добавления
     private float nextAddTime = 0f;
@@ -167,7 +184,15 @@ public class DestroyFireManager : MonoBehaviour
         // Сохраняем начальные позиции башни для сброса
         SaveTowerInitialPositions();
         
+        if (shakeAudioSource == null && shakeSound != null)
+        {
+            shakeAudioSource = gameObject.AddComponent<AudioSource>();
+            shakeAudioSource.playOnAwake = false;
+            shakeAudioSource.spatialBlend = 0f;
+        }
+        
         // Инициализируем прогресс бар
+        displayedProgress = currentProgress;
         UpdateProgressBar();
         
         // Устанавливаем первый интервал
@@ -176,6 +201,23 @@ public class DestroyFireManager : MonoBehaviour
     
     private void Update()
     {
+        // Плавная анимация заполнения бара: за progressBarFillDuration сек догоняем целевой прогресс
+        if (progressBar != null)
+        {
+            if (progressBarFillDuration > 0f)
+            {
+                float gap = currentProgress - displayedProgress;
+                float step = gap * Mathf.Clamp01(Time.deltaTime / progressBarFillDuration);
+                displayedProgress = Mathf.MoveTowards(displayedProgress, currentProgress, Mathf.Abs(step));
+                progressBar.fillAmount = displayedProgress;
+            }
+            else
+            {
+                displayedProgress = currentProgress;
+                progressBar.fillAmount = currentProgress;
+            }
+        }
+        
         if (!isActive) return;
         if (currentProgress >= 1f) return; // Уже завершено
         
@@ -218,6 +260,19 @@ public class DestroyFireManager : MonoBehaviour
     }
     
     /// <summary>
+    /// Проигрывает звук тряски (если назначен)
+    /// </summary>
+    private void PlayShakeSound()
+    {
+        if (shakeSound == null) return;
+        float vol = Mathf.Clamp01(shakeSoundVolume);
+        if (shakeAudioSource != null)
+            shakeAudioSource.PlayOneShot(shakeSound, vol);
+        else
+            AudioSource.PlayClipAtPoint(shakeSound, Camera.main != null ? Camera.main.transform.position : Vector3.zero, vol);
+    }
+    
+    /// <summary>
     /// Проверяет пороги прогресса и запускает тряску камеры
     /// </summary>
     private void CheckShakeThresholds()
@@ -229,6 +284,7 @@ public class DestroyFireManager : MonoBehaviour
         {
             triggered100 = true;
             thirdPersonCamera.Shake(shakeIntensity100, shakeDuration * 2f);
+            PlayShakeSound();
             
             // Запускаем падение башни
             StartTowerCollapse();
@@ -243,6 +299,7 @@ public class DestroyFireManager : MonoBehaviour
         {
             triggered80 = true;
             thirdPersonCamera.Shake(shakeIntensity80, shakeDuration);
+            PlayShakeSound();
             EnableFireGroup(fireGroup4);
             
             if (debug)
@@ -255,6 +312,7 @@ public class DestroyFireManager : MonoBehaviour
         {
             triggered60 = true;
             thirdPersonCamera.Shake(shakeIntensity60, shakeDuration);
+            PlayShakeSound();
             EnableFireGroup(fireGroup3);
             
             if (debug)
@@ -267,6 +325,7 @@ public class DestroyFireManager : MonoBehaviour
         {
             triggered40 = true;
             thirdPersonCamera.Shake(shakeIntensity40, shakeDuration);
+            PlayShakeSound();
             EnableFireGroup(fireGroup2);
             
             if (debug)
@@ -279,6 +338,7 @@ public class DestroyFireManager : MonoBehaviour
         {
             triggered20 = true;
             thirdPersonCamera.Shake(shakeIntensity20, shakeDuration);
+            PlayShakeSound();
             EnableFireGroup(fireGroup1);
             
             if (debug)
@@ -338,12 +398,13 @@ public class DestroyFireManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Обновляет отображение прогресс бара
+    /// Обновляет отображение прогресс бара (displayedProgress анимируется к currentProgress в Update)
     /// </summary>
     private void UpdateProgressBar()
     {
-        if (progressBar != null)
+        if (progressBar != null && progressBarFillDuration <= 0f)
         {
+            displayedProgress = currentProgress;
             progressBar.fillAmount = currentProgress;
         }
     }
@@ -392,6 +453,7 @@ public class DestroyFireManager : MonoBehaviour
         // Сбрасываем башню
         ResetTower();
         
+        displayedProgress = 0f;
         UpdateProgressBar();
         SetNextInterval();
         
@@ -409,6 +471,8 @@ public class DestroyFireManager : MonoBehaviour
     public void SetProgress(float progress)
     {
         currentProgress = Mathf.Clamp01(progress);
+        if (progressBarFillDuration <= 0f)
+            displayedProgress = currentProgress;
         UpdateProgressBar();
         OnProgressChanged?.Invoke(currentProgress);
         
@@ -565,6 +629,7 @@ public class DestroyFireManager : MonoBehaviour
         if (thirdPersonCamera != null)
         {
             thirdPersonCamera.Shake(shakeIntensityTopStage2, shakeDuration);
+            PlayShakeSound();
             if (debug) Debug.Log("[DestroyFireManager] Тряска: начало этапа 2 верхушки");
         }
         
@@ -592,6 +657,7 @@ public class DestroyFireManager : MonoBehaviour
         if (thirdPersonCamera != null)
         {
             thirdPersonCamera.Shake(shakeIntensityTopStage3, shakeDuration);
+            PlayShakeSound();
             if (debug) Debug.Log("[DestroyFireManager] Тряска: начало этапа 3 верхушки");
         }
         

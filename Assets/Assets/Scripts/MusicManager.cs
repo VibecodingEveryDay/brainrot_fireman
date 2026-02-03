@@ -56,16 +56,20 @@ public class MusicManager : MonoBehaviour
     
     private void Start()
     {
-        // BattleManager удалён из проекта
-        // Музыка боя может быть включена вручную через PlayFightMusic()
-        
-        // Начинаем с музыки лобби
+        // Вне ZoneCollider — lobby, в ZoneCollider — fight (переключает MusicZoneTrigger)
         PlayLobbyMusic();
     }
     
-    private void OnDestroy()
+    /// <summary>
+    /// Вызывается MusicZoneTrigger: игрок вошёл (true) или вышел (false) из зоны боя.
+    /// true — музыка fight, false — музыка lobby.
+    /// </summary>
+    public void SetPlayerInFightZone(bool inZone)
     {
-        // BattleManager удалён из проекта
+        if (inZone)
+            PlayFightMusic();
+        else
+            PlayLobbyMusic();
     }
     
     private void SetupAudioSource(AudioSource source)
@@ -193,16 +197,5 @@ public class MusicManager : MonoBehaviour
         
         active.Stop();
         active.volume = 0f;
-    }
-    
-    // Обработчики событий боя
-    private void OnBattleStarted()
-    {
-        PlayFightMusic();
-    }
-    
-    private void OnBattleEnded()
-    {
-        PlayLobbyMusic();
     }
 }

@@ -42,6 +42,7 @@ public class CellSpawnArea : MonoBehaviour
     private static readonly string[] RarityNames = { "Common", "Rare", "Exclusive", "Epic", "Mythic", "Legendary", "Secret" };
     
     private GameObject[] brainrotPrefabs;
+    private DestroyFireManager destroyFireManager;
     
     private void Awake()
     {
@@ -62,7 +63,46 @@ public class CellSpawnArea : MonoBehaviour
     
     private void Start()
     {
+        destroyFireManager = FindFirstObjectByType<DestroyFireManager>();
+        if (destroyFireManager != null)
+        {
+            destroyFireManager.OnProgressComplete += OnDestroyFireProgressComplete;
+            destroyFireManager.OnProgressChanged += OnDestroyFireProgressChanged;
+        }
         SpawnCells();
+    }
+    
+    private void OnDestroy()
+    {
+        if (destroyFireManager != null)
+        {
+            destroyFireManager.OnProgressComplete -= OnDestroyFireProgressComplete;
+            destroyFireManager.OnProgressChanged -= OnDestroyFireProgressChanged;
+        }
+    }
+    
+    private void OnDestroyFireProgressComplete()
+    {
+        RemoveAllCells();
+    }
+    
+    private void OnDestroyFireProgressChanged(float progress)
+    {
+        if (progress <= 0f)
+            SpawnCells();
+    }
+    
+    /// <summary>
+    /// Удаляет все Cell на карте (вызывается при 100% прогресса огня).
+    /// </summary>
+    private void RemoveAllCells()
+    {
+        Cell[] cells = FindObjectsByType<Cell>(FindObjectsSortMode.None);
+        for (int i = 0; i < cells.Length; i++)
+        {
+            if (cells[i] != null && cells[i].gameObject != null)
+                Destroy(cells[i].gameObject);
+        }
     }
     
     /// <summary>

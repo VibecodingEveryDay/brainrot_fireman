@@ -2246,6 +2246,10 @@ MonoBehaviour:
   brainrotBaseScale: 0.75
   brainrotCellOffset: {x: 0, y: -3.56, z: 0}
   spawnBrOffsetY: -2.08
+  brInfoOffsetY: 5
+  vfxEffect: {fileID: 2353600328335836179, guid: ceec7516237b4104b94300043ca39784, type: 3}
+  vfxScale: 3
+  vfxOffset: {x: 0, y: 0, z: 0}
 --- !u!65 &3279824892880177794
 BoxCollider:
   m_ObjectHideFlags: 0

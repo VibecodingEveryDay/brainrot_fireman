@@ -21,7 +21,7 @@ public class ShopSpeedManager : MonoBehaviour
     
     [Header("Price Settings")]
     [Tooltip("Цены за уровни от 0 до 60. Если цена не указана (-1), будет интерполирована между ближайшими указанными ценами")]
-    [SerializeField] private long[] levelPrices = new long[61];
+    [SerializeField] private long[] levelPrices;
     
     [Header("References")]
     [Tooltip("Transform, содержащий все Bar объекты (Bar1, Bar2, Bar3)")]
@@ -53,6 +53,13 @@ public class ShopSpeedManager : MonoBehaviour
     private double lastBalance = -1;
     private float balanceCheckInterval = 0.1f; // Проверяем баланс каждые 0.1 секунды
     private float balanceCheckTimer = 0f;
+    
+    private void Reset()
+    {
+        levelPrices = new long[61];
+        for (int i = 0; i < 61; i++)
+            levelPrices[i] = -1;
+    }
     
     private void Awake()
     {

@@ -1,10 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using System.Collections;
 
 /// <summary>
-/// Управляет телепортацией между стадиями игры (лобби и зона сражения).
-/// Использует fade эффект для плавного перехода.
+/// Управляет телепортацией (дом, зона башни). При 100% огня и нахождении игрока в зоне башни —
+/// показ "Вы проиграли!", телепорт в дом, удаление брейнрота из рук.
 /// </summary>
 public class TeleportManager : MonoBehaviour
 {
@@ -16,10 +17,44 @@ public class TeleportManager : MonoBehaviour
     [SerializeField] private float fadeSpeed = 0.5f;
     
     [Header("References")]
-    // BattleZone удалена из проекта
-    
-    [Tooltip("Позиция дома для телепортации после победы над боссом")]
+    [Tooltip("Позиция дома для телепортации (после поражения от огня и т.д.)")]
     [SerializeField] private Transform housePos;
+    
+    [Tooltip("Зона башни (объект с Collider trigger и TowerZoneTrigger). Игрок в зоне при 100% огня — поражение.")]
+    [SerializeField] private GameObject towerZoneTrigger;
+    
+    [Header("Lose Text (100% fire + player in tower zone)")]
+    [Tooltip("Текст для сообщения о поражении (красный)")]
+    [SerializeField] private TextMeshProUGUI loseText;
+    
+    [Tooltip("Текст поражения (русский)")]
+    [SerializeField] private string loseTextRu = "Вы проиграли!";
+    
+    [Tooltip("Текст поражения (английский)")]
+    [SerializeField] private string loseTextEn = "You lose!";
+    
+    [Header("Got Brainrot Text (player with brainrot exits tower zone)")]
+    [Tooltip("Текст для сообщения «Вы получили {имя брейнрота}» (ярко-зелёный)")]
+    [SerializeField] private TextMeshProUGUI gotBrainrotText;
+    
+    [Tooltip("Формат сообщения (русский), {0} = имя брейнрота")]
+    [SerializeField] private string gotBrainrotFormatRu = "Вы получили {0}";
+    
+    [Tooltip("Формат сообщения (английский), {0} = имя брейнрота")]
+    [SerializeField] private string gotBrainrotFormatEn = "You got {0}";
+    
+    [Header("Notification Animation")]
+    [Tooltip("Через сколько секунд скрывать уведомление (0 = не скрывать автоматически)")]
+    [SerializeField] private float notificationHideAfterSeconds = 3f;
+    
+    [Tooltip("Длительность fade-анимации скрытия текста (сек)")]
+    [SerializeField] private float notificationFadeDuration = 0.5f;
+    
+    [Tooltip("Длительность одного пульса масштаба текста (сек)")]
+    [SerializeField] private float notificationPulseDuration = 0.4f;
+    
+    [Tooltip("Максимальный масштаб при пульсе (1 = без увеличения)")]
+    [SerializeField] private float notificationPulseMaxScale = 1.2f;
     
     private GameObject fadeCanvasInstance;
     private Image fadeImage;
@@ -32,6 +67,21 @@ public class TeleportManager : MonoBehaviour
     // Ссылка на игрока
     private Transform playerTransform;
     private ThirdPersonController playerController;
+    
+    // Игрок в зоне башни (триггер обновляется TowerZoneTrigger)
+    private bool playerInTowerZone = false;
+    
+    // Уже обработали поражение от огня (чтобы не повторять)
+    private bool loseFromFireHandled = false;
+    
+    private DestroyFireManager destroyFireManager;
+    
+    private bool teleportingDueToLose = false;
+    
+    private Coroutine notificationHideCoroutine;
+    private Coroutine notificationPulseCoroutine;
+    private Vector3 cachedLoseTextBaseScale = Vector3.one;
+    private Vector3 cachedGotBrainrotTextBaseScale = Vector3.one;
     
     private static TeleportManager instance;
     
@@ -69,6 +119,179 @@ public class TeleportManager : MonoBehaviour
     private void Start()
     {
         FindPlayer();
+        
+        if (loseText != null)
+            loseText.gameObject.SetActive(false);
+        if (gotBrainrotText != null)
+            gotBrainrotText.gameObject.SetActive(false);
+        
+        destroyFireManager = FindFirstObjectByType<DestroyFireManager>();
+        if (destroyFireManager != null)
+            destroyFireManager.OnProgressComplete += OnDestroyFireProgressComplete;
+    }
+    
+    private void OnDestroy()
+    {
+        if (destroyFireManager != null)
+            destroyFireManager.OnProgressComplete -= OnDestroyFireProgressComplete;
+    }
+    
+    private void Update()
+    {
+        if (loseFromFireHandled && destroyFireManager != null && destroyFireManager.GetProgress() < 1f)
+            loseFromFireHandled = false;
+    }
+    
+    /// <summary>
+    /// Вызывается TowerZoneTrigger при входе игрока в зону башни.
+    /// </summary>
+    public void SetPlayerInTowerZone(bool inside)
+    {
+        playerInTowerZone = inside;
+    }
+    
+    /// <summary>
+    /// Вызывается TowerZoneTrigger при выходе игрока из зоны с брейнротом в руках.
+    /// </summary>
+    public void OnPlayerExitedTowerZoneWithBrainrot(string brainrotName)
+    {
+        if (string.IsNullOrEmpty(brainrotName)) return;
+        if (gotBrainrotText == null) return;
+        
+        string format = IsRussianLanguage() ? gotBrainrotFormatRu : gotBrainrotFormatEn;
+        gotBrainrotText.text = string.Format(format, brainrotName);
+        gotBrainrotText.color = new Color(0.2f, 1f, 0.2f);
+        gotBrainrotText.gameObject.SetActive(true);
+        cachedGotBrainrotTextBaseScale = gotBrainrotText.transform.localScale;
+        SetNotificationAlpha(gotBrainrotText, 1f);
+        StartNotificationPulse(gotBrainrotText.transform, cachedGotBrainrotTextBaseScale);
+        StartNotificationHideAfterDelay(gotBrainrotText, cachedGotBrainrotTextBaseScale);
+    }
+    
+    private void OnDestroyFireProgressComplete()
+    {
+        if (loseFromFireHandled) return;
+        if (!playerInTowerZone) return;
+        
+        loseFromFireHandled = true;
+        teleportingDueToLose = true;
+        ShowLoseText();
+        RemoveCarriedBrainrot();
+        TeleportToHouse();
+    }
+    
+    private void ShowLoseText()
+    {
+        if (loseText == null) return;
+        loseText.text = IsRussianLanguage() ? loseTextRu : loseTextEn;
+        loseText.color = Color.red;
+        loseText.gameObject.SetActive(true);
+        cachedLoseTextBaseScale = loseText.transform.localScale;
+        SetNotificationAlpha(loseText, 1f);
+        StartNotificationPulse(loseText.transform, cachedLoseTextBaseScale);
+        StartNotificationHideAfterDelay(loseText, cachedLoseTextBaseScale);
+    }
+    
+    private void StartNotificationPulse(Transform textTransform, Vector3 baseScale)
+    {
+        if (textTransform == null || notificationPulseDuration <= 0f) return;
+        if (notificationPulseCoroutine != null)
+            StopCoroutine(notificationPulseCoroutine);
+        notificationPulseCoroutine = StartCoroutine(PulseScaleOnceCoroutine(textTransform, notificationPulseDuration, notificationPulseMaxScale, baseScale));
+    }
+    
+    private IEnumerator PulseScaleOnceCoroutine(Transform textTransform, float duration, float maxScale, Vector3 baseScale)
+    {
+        if (textTransform == null) yield break;
+        float half = duration * 0.5f;
+        float elapsed = 0f;
+        while (elapsed < half)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / half);
+            float s = Mathf.Lerp(1f, maxScale, t);
+            textTransform.localScale = baseScale * s;
+            yield return null;
+        }
+        textTransform.localScale = baseScale * maxScale;
+        elapsed = 0f;
+        while (elapsed < half)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / half);
+            float s = Mathf.Lerp(maxScale, 1f, t);
+            textTransform.localScale = baseScale * s;
+            yield return null;
+        }
+        textTransform.localScale = baseScale;
+        notificationPulseCoroutine = null;
+    }
+    
+    private void SetNotificationAlpha(TextMeshProUGUI text, float alpha)
+    {
+        if (text == null) return;
+        Color c = text.color;
+        c.a = alpha;
+        text.color = c;
+    }
+    
+    private void StartNotificationHideAfterDelay(TextMeshProUGUI text, Vector3 baseScale)
+    {
+        if (text == null || notificationHideAfterSeconds <= 0f) return;
+        if (notificationHideCoroutine != null)
+            StopCoroutine(notificationHideCoroutine);
+        notificationHideCoroutine = StartCoroutine(HideNotificationAfterDelayCoroutine(text, baseScale));
+    }
+    
+    private IEnumerator HideNotificationAfterDelayCoroutine(TextMeshProUGUI text, Vector3 baseScale)
+    {
+        if (text == null) yield break;
+        yield return new WaitForSeconds(notificationHideAfterSeconds);
+        if (text == null) yield break;
+        if (notificationFadeDuration <= 0f)
+        {
+            text.transform.localScale = baseScale;
+            text.gameObject.SetActive(false);
+            notificationHideCoroutine = null;
+            yield break;
+        }
+        float elapsed = 0f;
+        Color startColor = text.color;
+        while (elapsed < notificationFadeDuration)
+        {
+            elapsed += Time.deltaTime;
+            float alpha = Mathf.Lerp(1f, 0f, Mathf.Clamp01(elapsed / notificationFadeDuration));
+            Color c = startColor;
+            c.a = alpha;
+            text.color = c;
+            yield return null;
+        }
+        SetNotificationAlpha(text, 0f);
+        text.transform.localScale = baseScale;
+        text.gameObject.SetActive(false);
+        notificationHideCoroutine = null;
+    }
+    
+    private void RemoveCarriedBrainrot()
+    {
+        if (playerTransform == null) return;
+        PlayerCarryController carry = playerTransform.GetComponent<PlayerCarryController>();
+        if (carry == null)
+            carry = FindFirstObjectByType<PlayerCarryController>();
+        if (carry == null) return;
+        
+        BrainrotObject carried = carry.GetCurrentCarriedObject();
+        if (carried != null)
+        {
+            carry.DropObject();
+            if (carried.gameObject != null)
+                Destroy(carried.gameObject);
+        }
+    }
+    
+    private static bool IsRussianLanguage()
+    {
+        return true;
     }
     
     /// <summary>
@@ -372,6 +595,9 @@ public class TeleportManager : MonoBehaviour
         
         // Осветляем экран
         yield return StartCoroutine(FadeIn());
+        
+        if (teleportingDueToLose)
+            teleportingDueToLose = false;
         
         isFading = false;
     }

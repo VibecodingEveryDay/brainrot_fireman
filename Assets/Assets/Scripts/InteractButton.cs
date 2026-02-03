@@ -37,6 +37,7 @@ public class InteractButton : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     private int searchFrameCount = 0;
     private string defaultText = "ВЗЯТЬ"; // Будет обновлено через локализацию
     private string putText = "ПОСТАВИТЬ"; // Будет обновлено через локализацию
+    private string openText = "ОТКРЫТЬ"; // Для Cell, будет обновлено через локализацию
     private string currentLanguage = "ru"; // Текущий язык для отслеживания изменений
     
     private void Awake()
@@ -463,11 +464,13 @@ public class InteractButton : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         {
             defaultText = "ВЗЯТЬ";
             putText = "ПОСТАВИТЬ";
+            openText = "ОТКРЫТЬ";
         }
         else
         {
             defaultText = "TAKE";
             putText = "PUT";
+            openText = "OPEN";
         }
     }
     
@@ -490,7 +493,11 @@ public class InteractButton : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     /// </summary>
     private void UpdateButtonText()
     {
-        if (textTMP == null) return;
+        if (textTMP == null)
+        {
+            textTMP = GetComponentInChildren<TextMeshProUGUI>(true);
+            if (textTMP == null) return;
+        }
         
         // Проверяем, изменился ли язык (для обновления текстов)
         string currentLang = GetCurrentLanguage();
@@ -500,20 +507,23 @@ public class InteractButton : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             UpdateLocalizedTexts();
         }
         
-        // Проверяем, есть ли брейнрот в руках
-        bool hasBrainrotInHands = false;
-        if (playerCarryController != null)
+        // Текст: Cell — "Открыть"; в руках брейнрот — "Поставить"; иначе — "Взять"
+        string newText;
+        if (currentInteractableObject is Cell)
+            newText = openText;
+        else
         {
-            hasBrainrotInHands = playerCarryController.GetCurrentCarriedObject() != null;
+            bool hasBrainrotInHands = playerCarryController != null && playerCarryController.GetCurrentCarriedObject() != null;
+            newText = hasBrainrotInHands ? putText : defaultText;
         }
-        
-        // Текст: если в руках — "Поставить"; иначе — "Взять"
-        string newText = hasBrainrotInHands ? putText : defaultText;
         
         if (textTMP.text != newText)
-        {
             textTMP.text = newText;
-        }
+        
+        if (!textTMP.gameObject.activeSelf)
+            textTMP.gameObject.SetActive(true);
+        if (!textTMP.enabled)
+            textTMP.enabled = true;
     }
     
     /// <summary>

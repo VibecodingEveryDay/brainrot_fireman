@@ -51,9 +51,24 @@ public class Cell : InteractableObject
     [Tooltip("Дополнительное смещение по Y для спавна брейнрота (мировые координаты)")]
     [SerializeField] private float spawnBrOffsetY = 0f;
     
+    [Tooltip("Дополнительное смещение по Y для BR_Info над клеткой (мировые координаты)")]
+    [SerializeField] private float brInfoOffsetY = 0f;
+    
+    [Header("VFX on Open")]
+    [Tooltip("Префаб VFX-эффекта при открытии клетки (например Particle System)")]
+    [SerializeField] private GameObject vfxEffect;
+    
+    [Tooltip("Масштаб VFX-эффекта")]
+    [SerializeField] private float vfxScale = 1f;
+    
+    [Tooltip("Смещение VFX относительно центра клетки (локальные X, Y, Z)")]
+    [SerializeField] private Vector3 vfxOffset = Vector3.zero;
+    
     // Кэш данных брейнрота
     private BrainrotObject cachedBrainrotData;
     private GameObject previewBrainrot;
+    /// <summary> Экземпляр BR_Info, созданный и отображаемый самой Cell. </summary>
+    private GameObject cellInfoInstance;
     
     // Аниматор игрока (параметр в Animator должен быть ровно "IsOpen" — учитывается регистр)
     private Animator playerAnimator;
@@ -152,6 +167,10 @@ public class Cell : InteractableObject
     
     private void Start()
     {
+        // Уровень открытия из GameStorage (сохранения)
+        if (GameStorage.Instance != null)
+            SetOpeningSpeedLevel(GameStorage.Instance.GetOpeningLevel());
+        
         // Не показывать предупреждение, если источник будет задан извне (SetBrainrotTemplate)
         if (GetBrainrotSource() != null)
         {
@@ -244,68 +263,100 @@ public class Cell : InteractableObject
     }
     
     /// <summary>
-    /// Создаёт превью брейнрота внутри клетки (отключённый)
+    /// Создаёт превью брейнрота внутри клетки и BR_Info отображает сама Cell (префаб из брейнрота).
     /// </summary>
     private void CreateBrainrotPreview()
     {
-        previewInfoShown = false;
         GameObject source = GetBrainrotSource();
-        if (source == null)
-        {
-            return;
-        }
+        if (source == null) return;
         
         Vector3 centerPosition = GetCellCenter();
         Vector3 offsetWorld = transform.TransformDirection(brainrotCellOffset);
         previewBrainrot = Instantiate(source, centerPosition + offsetWorld, transform.rotation);
         previewBrainrot.name = "BrainrotPreview";
-        
-        // Делаем дочерним объектом клетки
         previewBrainrot.transform.SetParent(transform, true);
         
-        // Получаем компонент BrainrotObject для данных
         cachedBrainrotData = previewBrainrot.GetComponent<BrainrotObject>();
-        
         if (cachedBrainrotData != null)
         {
-            // Масштаб: brainrotBaseScale * cellScale из BrainrotObject
             float scale = brainrotBaseScale * cachedBrainrotData.GetCellScale();
             previewBrainrot.transform.localScale = Vector3.one * scale;
+            // Отключаем interaction у превью; BR_Info Cell создаёт и показывает сама
+            cachedBrainrotData.enabled = false;
         }
         else
         {
             Debug.LogWarning($"[Cell] {gameObject.name}: Префаб не содержит компонент BrainrotObject!");
         }
         
-        // Сначала включаем превью, чтобы BrainrotObject выполнил Start() и создал BR_Info (InitializeInfoPrefab)
         previewBrainrot.SetActive(true);
         
+        // Cell сама берёт префаб BR_Info из брейнрота и отображает его
         if (cachedBrainrotData != null)
-        {
-            // После создания info — отключаем только interaction, BR_Info оставляем видимым
-            cachedBrainrotData.enabled = false;
-            cachedBrainrotData.SetInfoVisible(true);
-        }
-    }
-    
-    private bool previewInfoShown;
-    
-    private void LateUpdate()
-    {
-        // Превью-брейнрот создаёт infoPrefab в Start — показываем BR_Info один раз после создания
-        if (!previewInfoShown && previewBrainrot != null && cachedBrainrotData != null && !cachedBrainrotData.enabled)
-        {
-            cachedBrainrotData.SetInfoVisible(true);
-            previewInfoShown = true;
-        }
+            CreateCellInfoFromBrainrot();
     }
     
     /// <summary>
-    /// Установить уровень прокачки скорости открытия (для будущей интеграции с прогрессом).
+    /// Создаёт экземпляр BR_Info из префаба брейнрота, заполняет данными и вешает на Cell.
+    /// </summary>
+    private void CreateCellInfoFromBrainrot()
+    {
+        if (cachedBrainrotData == null) return;
+        GameObject prefab = cachedBrainrotData.GetInfoPrefab();
+        if (prefab == null) return;
+        
+        if (cellInfoInstance != null)
+        {
+            Destroy(cellInfoInstance);
+            cellInfoInstance = null;
+        }
+        
+        Vector3 center = GetCellCenter();
+        Vector3 pos = center + new Vector3(0f, brInfoOffsetY, 0f);
+        cellInfoInstance = Instantiate(prefab, pos, Quaternion.identity);
+        cellInfoInstance.name = "CellBR_Info";
+        cellInfoInstance.transform.SetParent(transform, true);
+        
+        InfoPrefabBillboard billboard = cellInfoInstance.GetComponent<InfoPrefabBillboard>();
+        if (billboard == null)
+            cellInfoInstance.AddComponent<InfoPrefabBillboard>();
+        
+        cachedBrainrotData.FillInfoPrefabInstance(cellInfoInstance);
+    }
+    
+    /// <summary>
+    /// Установить уровень прокачки скорости открытия (из GameStorage или после покупки в магазине).
     /// </summary>
     public void SetOpeningSpeedLevel(int level)
     {
         openingSpeedLevel = Mathf.Max(0, level);
+    }
+    
+    /// <summary>
+    /// Обновляет уровень открытия у всех активных Cell в сцене из GameStorage (вызывается после покупки в ShopOpeningManager).
+    /// </summary>
+    public static void RefreshAllCellsOpeningLevel()
+    {
+        if (GameStorage.Instance == null) return;
+        int level = GameStorage.Instance.GetOpeningLevel();
+        Cell[] cells = Object.FindObjectsByType<Cell>(FindObjectsSortMode.None);
+        for (int i = 0; i < cells.Length; i++)
+        {
+            if (cells[i] != null)
+            {
+                cells[i].SetOpeningSpeedLevel(level);
+                cells[i].RecalculateInteractionTimeIfInitialized();
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Пересчитывает время взаимодействия, если брейнрот уже инициализирован (для вызова после смены уровня открытия).
+    /// </summary>
+    private void RecalculateInteractionTimeIfInitialized()
+    {
+        if (cachedBrainrotData != null)
+            CalculateInteractionTime();
     }
     
     /// <summary>
@@ -410,11 +461,37 @@ public class Cell : InteractableObject
             playerAnimator.SetBool(IsOpenHash, false);
         }
         
+        // Спавним VFX при открытии
+        SpawnOpenVFX();
+        
         // Спавним свободного брейнрота на месте клетки
         SpawnFreeBrainrot();
         
         // Уничтожаем клетку
         Destroy(gameObject);
+    }
+    
+    /// <summary>
+    /// Спавнит VFX-эффект в результате открытия клетки (позиция: центр клетки + vfxOffset, масштаб: vfxScale).
+    /// </summary>
+    private void SpawnOpenVFX()
+    {
+        if (vfxEffect == null) return;
+        
+        Vector3 center = GetCellCenter();
+        Vector3 offsetWorld = transform.TransformDirection(vfxOffset);
+        Vector3 vfxPosition = center + offsetWorld;
+        Quaternion vfxRotation = transform.rotation;
+        
+        GameObject vfxInstance = Instantiate(vfxEffect, vfxPosition, vfxRotation);
+        vfxInstance.transform.localScale = Vector3.one * vfxScale;
+        vfxInstance.SetActive(true);
+        
+        ParticleSystem[] particleSystems = vfxInstance.GetComponentsInChildren<ParticleSystem>(true);
+        for (int i = 0; i < particleSystems.Length; i++)
+        {
+            particleSystems[i].Play(true);
+        }
     }
     
     /// <summary>

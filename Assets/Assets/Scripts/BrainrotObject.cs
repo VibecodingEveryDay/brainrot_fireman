@@ -1226,6 +1226,49 @@ public class BrainrotObject : InteractableObject
     }
     
     /// <summary>
+    /// Возвращает префаб BR_Info (для отображения в Cell и т.п.).
+    /// </summary>
+    public GameObject GetInfoPrefab()
+    {
+        return infoPrefab;
+    }
+    
+    /// <summary>
+    /// Возвращает смещение префаба с данными относительно объекта.
+    /// </summary>
+    public Vector3 GetInfoPrefabOffset()
+    {
+        return infoPrefabOffset;
+    }
+    
+    /// <summary>
+    /// Заполняет экземпляр префаба BR_Info данными этого брейнрота (имя, редкость, доход, уровень).
+    /// Вызывается из Cell для отображения info над клеткой.
+    /// </summary>
+    public void FillInfoPrefabInstance(GameObject infoInstance)
+    {
+        if (infoInstance == null) return;
+        TextMeshPro nameTmp = null, rarityTmp = null, incomeTmp = null, levelTmp = null;
+        Transform[] children = infoInstance.GetComponentsInChildren<Transform>(true);
+        foreach (Transform child in children)
+        {
+            TextMeshPro tmp = child.GetComponent<TextMeshPro>();
+            if (tmp == null) continue;
+            switch (child.name)
+            {
+                case "Name": nameTmp = tmp; break;
+                case "Rarity": rarityTmp = tmp; break;
+                case "Income": incomeTmp = tmp; break;
+                case "Level": levelTmp = tmp; break;
+            }
+        }
+        if (nameTmp != null) nameTmp.text = GetLocalizedBrainrotName();
+        if (rarityTmp != null) ApplyRarityColor(rarityTmp, GetLocalizedRarity(rarity), rarity);
+        if (incomeTmp != null) incomeTmp.text = FormatIncome(GetFinalIncome());
+        if (levelTmp != null) levelTmp.text = FormatLevel(level);
+    }
+    
+    /// <summary>
     /// Получает локализованный текст редкости на основе текущего языка YG2
     /// В параметрах всегда используется английское значение, но отображается локализованный текст
     /// </summary>

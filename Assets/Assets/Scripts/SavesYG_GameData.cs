@@ -29,6 +29,11 @@ namespace YG
         public int PlayerSpeedLevel = 10;
         
         /// <summary>
+        /// Уровень скорости открытия клеток (Opening Multiplier)
+        /// </summary>
+        public int OpeningLevel = 0;
+        
+        /// <summary>
         /// Список номеров купленных безопасных зон (1-4)
         /// </summary>
         public List<int> PurchasedSafeZones = new List<int>();

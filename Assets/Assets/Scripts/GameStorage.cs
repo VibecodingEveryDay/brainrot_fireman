@@ -701,6 +701,36 @@ public class GameStorage : MonoBehaviour
     
     #endregion
     
+    #region Opening Level Methods
+    
+    /// <summary>
+    /// Получить уровень скорости открытия клеток
+    /// </summary>
+    public int GetOpeningLevel()
+    {
+        return YG2.saves.OpeningLevel;
+    }
+    
+    /// <summary>
+    /// Установить уровень скорости открытия клеток
+    /// </summary>
+    public void SetOpeningLevel(int level)
+    {
+        YG2.saves.OpeningLevel = level;
+        Save();
+    }
+    
+    /// <summary>
+    /// Увеличить уровень скорости открытия клеток
+    /// </summary>
+    public void IncreaseOpeningLevel(int amount = 1)
+    {
+        YG2.saves.OpeningLevel += amount;
+        Save();
+    }
+    
+    #endregion
+    
     #region SafeZones Methods
     
     /// <summary>
@@ -844,6 +874,9 @@ public class GameStorage : MonoBehaviour
         // Сбрасываем уровень скорости к значению по умолчанию
         YG2.saves.PlayerSpeedLevel = 0;
         
+        // Сбрасываем уровень скорости открытия клеток
+        YG2.saves.OpeningLevel = 0;
+        
         // Сбрасываем силу игрока (уровень атаки)
         YG2.saves.AttackPowerLevel = 0;
         
@@ -876,7 +909,7 @@ public class GameStorage : MonoBehaviour
             }
         }
         
-        Debug.Log("[GameStorage] Storage очищен: баланс, все Brainrot объекты, размещенные брейнроты, доходы earnpanel, уровень скорости, сила игрока, купленные безопасные зоны и разблокированные лестницы сброшены");
+        Debug.Log("[GameStorage] Storage очищен: баланс, все Brainrot объекты, размещенные брейнроты, доходы earnpanel, уровень скорости, уровень открытия, сила игрока, купленные безопасные зоны и разблокированные лестницы сброшены");
     }
     
     /// <summary>
