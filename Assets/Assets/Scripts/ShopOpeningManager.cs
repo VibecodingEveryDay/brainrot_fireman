@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
 using System;
 
@@ -247,6 +248,9 @@ public class ShopOpeningManager : MonoBehaviour
             gameStorage = GameStorage.Instance;
         if (gameStorage == null) return;
         
+        if (openingBars.Count == 0)
+            SetupOpeningBars();
+        
         int currentLevel = gameStorage.GetOpeningLevel();
         float currentOpening = CalculateOpeningSpeed(currentLevel);
         
@@ -372,9 +376,17 @@ public class ShopOpeningManager : MonoBehaviour
             gameStorage.IncreaseOpeningLevel(actualLevelsToAdd);
             gameStorage.Save();
             Cell.RefreshAllCellsOpeningLevel();
+            lastBalance = gameStorage.GetBalanceDouble();
             UpdateAllOpeningBars();
+            StartCoroutine(RefreshOpeningBarsNextFrame());
             if (debug)
                 Debug.Log($"[ShopOpeningManager] Уровень открытия увеличен на {actualLevelsToAdd}, новый уровень: {gameStorage.GetOpeningLevel()}");
         }
+    }
+    
+    private IEnumerator RefreshOpeningBarsNextFrame()
+    {
+        yield return null;
+        UpdateAllOpeningBars();
     }
 }

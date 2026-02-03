@@ -1,56 +1,23 @@
 {
-    "balanceCount": 508,
+    "balanceCount": 602,
     "balanceScaler": "K",
     "Brainrots": [],
-    "PlayerSpeedLevel": 0,
-    "OpeningLevel": 0,
+    "PlayerSpeedLevel": 10,
+    "OpeningLevel": 10,
     "PurchasedSafeZones": [],
     "PlacedBrainrots": [
         {
             "placementID": 3,
-            "brainrotName": "TorrtuginniDragonfrutini",
+            "brainrotName": "BallerinaCappuccina",
             "level": 0,
             "rarity": "Exclusive",
-            "baseIncome": 620
-        },
-        {
-            "placementID": 2,
-            "brainrotName": "DragonCannelloni",
-            "level": 0,
-            "rarity": "Epic",
-            "baseIncome": 479
-        },
-        {
-            "placementID": 4,
-            "brainrotName": "TorrtuginniDragonfrutini",
-            "level": 0,
-            "rarity": "Rare",
-            "baseIncome": 140
-        },
-        {
-            "placementID": 1,
-            "brainrotName": "TorrtuginniDragonfrutini",
-            "level": 0,
-            "rarity": "Epic",
-            "baseIncome": 719
+            "baseIncome": 855
         }
     ],
     "EarnPanelBalances": [
         {
             "panelID": 3,
-            "accumulatedBalance": 1636800.0
-        },
-        {
-            "panelID": 2,
-            "accumulatedBalance": 6370700.0
-        },
-        {
-            "panelID": 4,
-            "accumulatedBalance": 81200.0
-        },
-        {
-            "panelID": 1,
-            "accumulatedBalance": 754950.0
+            "accumulatedBalance": 1641600.0
         }
     ],
     "AttackPowerLevel": 0,
@@ -64,5 +31,5 @@
         false,
         false
     ],
-    "idSave": 2501
+    "idSave": 57
 }

@@ -34,6 +34,10 @@ public class ThirdPersonController : MonoBehaviour
     
     [Header("Ground Check")]
     [SerializeField] private float groundCheckDistance = 0.2f;
+    [Tooltip("Буфер времени (сек): считаем на земле ещё столько после потери контакта. Увеличить при мерцании анимации на ровной поверхности.")]
+    [SerializeField] private float groundedBufferTime = 0.25f;
+    [Tooltip("Кадров без контакта с землёй перед переходом в «полёт» (гистерезис, уменьшает мерцание)")]
+    [SerializeField] private int groundedFalseFramesRequired = 3;
     
     [Header("Jump Rotation")]
     [SerializeField] private float jumpRotationAngle = 10f; // Угол поворота модели при прыжке
@@ -44,7 +48,7 @@ public class ThirdPersonController : MonoBehaviour
     private bool isGrounded;
     private bool isActuallyGrounded; // Реальное состояние контакта с землёй (без буфера)
     private float lastGroundedTime; // Время последнего контакта с землёй
-    private const float GROUNDED_BUFFER_TIME = 0.15f; // Буфер времени для стабильности isGrounded
+    private int groundedFalseFrameCount; // Подряд кадров без контакта (для гистерезиса)
     private float currentSpeed;
     private bool jumpRequested = false; // Запрос на прыжок от кнопки
     private float jumpRequestTime = -1f; // Время запроса прыжка (для обработки с небольшой задержкой)
@@ -266,17 +270,18 @@ public class ThirdPersonController : MonoBehaviour
         // Проверка земли через CharacterController (основной метод)
         isActuallyGrounded = characterController.isGrounded;
         
-        // Дополнительная проверка через OverlapSphere если CharacterController говорит что не на земле
+        // Дополнительная проверка через OverlapSphere от низа капсулы, если CharacterController говорит что не на земле
         if (!isActuallyGrounded)
         {
-            Vector3 checkPosition = transform.position + Vector3.down * groundCheckDistance;
-            float checkRadius = characterController.radius;
+            Vector3 capsuleBottom = transform.position + characterController.center + Vector3.down * (characterController.height * 0.5f);
+            Vector3 checkPosition = capsuleBottom + Vector3.down * groundCheckDistance;
+            float checkRadius = Mathf.Max(characterController.radius * 1.1f, 0.1f);
             
             Collider[] hits = Physics.OverlapSphere(checkPosition, checkRadius, ~0, QueryTriggerInteraction.Ignore);
             
             foreach (Collider hit in hits)
             {
-                if (hit.gameObject != gameObject && !hit.isTrigger)
+                if (hit != null && hit.gameObject != gameObject && !hit.isTrigger)
                 {
                     isActuallyGrounded = true;
                     break;
@@ -288,6 +293,14 @@ public class ThirdPersonController : MonoBehaviour
         if (isActuallyGrounded)
         {
             lastGroundedTime = Time.time;
+            groundedFalseFrameCount = 0;
+        }
+        else
+        {
+            if (velocity.y <= 0.1f)
+                groundedFalseFrameCount++;
+            else
+                groundedFalseFrameCount = groundedFalseFramesRequired;
         }
         
         // isGrounded = true если реально на земле ИЛИ был на земле недавно (буфер)
@@ -298,13 +311,13 @@ public class ThirdPersonController : MonoBehaviour
         }
         else if (velocity.y > 0.1f)
         {
-            // Прыгаем вверх — точно не на земле
             isGrounded = false;
         }
         else
         {
-            // Проверяем буфер времени (coyote time)
-            isGrounded = (Time.time - lastGroundedTime) < GROUNDED_BUFFER_TIME;
+            bool withinBuffer = (Time.time - lastGroundedTime) < groundedBufferTime;
+            bool failedEnoughFrames = groundedFalseFrameCount >= groundedFalseFramesRequired;
+            isGrounded = withinBuffer || !failedEnoughFrames;
         }
         
         // На лестнице всегда считаем isGrounded = true

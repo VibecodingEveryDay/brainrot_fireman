@@ -33,6 +33,7 @@ public class MusicManager : MonoBehaviour
     private bool isPlayingA = true;
     
     private Coroutine crossfadeCoroutine;
+    private Coroutine zoneSwitchCoroutine;
     
     private void Awake()
     {
@@ -56,20 +57,46 @@ public class MusicManager : MonoBehaviour
     
     private void Start()
     {
-        // Вне ZoneCollider — lobby, в ZoneCollider — fight (переключает MusicZoneTrigger)
+        // Вне ZoneCollider — lobby, в ZoneCollider — fight (переключает TowerZoneTrigger)
         PlayLobbyMusic();
+        StartCoroutine(PreloadFightMusicCoroutine());
     }
     
     /// <summary>
-    /// Вызывается MusicZoneTrigger: игрок вошёл (true) или вышел (false) из зоны боя.
-    /// true — музыка fight, false — музыка lobby.
+    /// Подгружает музыку боя при старте (прогрев на неактивном источнике), чтобы при первом входе в зону не было просадки FPS.
+    /// Ждём завершения crossfade lobby, чтобы не перезаписать играющий источник.
+    /// </summary>
+    private IEnumerator PreloadFightMusicCoroutine()
+    {
+        if (fightMusic == null) yield break;
+        yield return new WaitForSeconds(crossfadeDuration + 0.2f);
+        AudioSource inactive = isPlayingA ? audioSourceB : audioSourceA;
+        inactive.clip = fightMusic;
+        inactive.volume = 0f;
+        inactive.Play();
+        yield return null;
+        inactive.Pause();
+    }
+    
+    /// <summary>
+    /// Вызывается TowerZoneTrigger: игрок вошёл (true) или вышел (false) из зоны боя.
+    /// Переключение отложено на следующий кадр, чтобы не вызывать просадку FPS в кадр входа в триггер.
     /// </summary>
     public void SetPlayerInFightZone(bool inZone)
     {
+        if (zoneSwitchCoroutine != null)
+            StopCoroutine(zoneSwitchCoroutine);
+        zoneSwitchCoroutine = StartCoroutine(SetZoneDelayedCoroutine(inZone));
+    }
+    
+    private IEnumerator SetZoneDelayedCoroutine(bool inZone)
+    {
+        yield return null;
         if (inZone)
             PlayFightMusic();
         else
             PlayLobbyMusic();
+        zoneSwitchCoroutine = null;
     }
     
     private void SetupAudioSource(AudioSource source)

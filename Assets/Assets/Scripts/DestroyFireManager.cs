@@ -93,6 +93,12 @@ public class DestroyFireManager : MonoBehaviour
     [Tooltip("Тело башни (группа мешей)")]
     [SerializeField] private Transform towerBody;
     
+    [Tooltip("Коллайдер зоны башни (TowerZoneTrigger). Отключается при падении, включается при рестарте — игрок не может войти в зону во время падения.")]
+    [SerializeField] private Collider towerZoneTriggerCollider;
+    
+    [Tooltip("Невидимая стена (GameObject). По умолчанию выключена, включается только на время падения башни (100% до рестарта).")]
+    [SerializeField] private GameObject invisibleWall;
+    
     [Header("Tower Top Collapse Timing (seconds)")]
     [Tooltip("Время этапа 1 верхушки: к Pos(-19,-32,-10) Rot(0,0,-10)")]
     [SerializeField] private float topStage1Duration = 1.5f;
@@ -197,6 +203,10 @@ public class DestroyFireManager : MonoBehaviour
         
         // Устанавливаем первый интервал
         SetNextInterval();
+        
+        // Невидимая стена по умолчанию выключена
+        if (invisibleWall != null)
+            invisibleWall.SetActive(false);
     }
     
     private void Update()
@@ -453,6 +463,14 @@ public class DestroyFireManager : MonoBehaviour
         // Сбрасываем башню
         ResetTower();
         
+        // Разрешаем вход в зону башни снова
+        if (towerZoneTriggerCollider != null)
+            towerZoneTriggerCollider.enabled = true;
+        
+        // Выключаем невидимую стену
+        if (invisibleWall != null)
+            invisibleWall.SetActive(false);
+        
         displayedProgress = 0f;
         UpdateProgressBar();
         SetNextInterval();
@@ -550,6 +568,14 @@ public class DestroyFireManager : MonoBehaviour
         {
             floorNumbersTexts.SetActive(false);
         }
+        
+        // Блокируем вход в зону башни до рестарта
+        if (towerZoneTriggerCollider != null)
+            towerZoneTriggerCollider.enabled = false;
+        
+        // Включаем невидимую стену на время падения
+        if (invisibleWall != null)
+            invisibleWall.SetActive(true);
         
         // Запускаем ДВЕ независимые корутины - для верхушки и тела
         if (towerTop != null)
